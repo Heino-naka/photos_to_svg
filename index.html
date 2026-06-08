@@ -27,6 +27,9 @@
         #downloadBtn { background: #28a745; color: white; }
         #downloadBtn:hover { background: #218838; }
         #downloadBtn:disabled { background: #ccc; color: #666; cursor: not-allowed; }
+        #pngBtn { background: #6f42c1; color: white; }
+        #pngBtn:hover { background: #5a32a3; }
+        #pngBtn:disabled { background: #ccc; color: #666; cursor: not-allowed; }
 
         #statusMessage { font-weight: bold; color: #444; min-width: 200px; text-align: center; }
         #statusMessage.error { color: #c0392b; }
@@ -74,6 +77,7 @@
     <div class="control-area">
         <button id="convertBtn" disabled>ベクターに変換する</button>
         <button id="downloadBtn" disabled>SVGをダウンロード</button>
+        <button id="pngBtn" disabled>PNGをダウンロード</button>
     </div>
 
     <div style="text-align: center; margin: 10px 0;">
@@ -1325,6 +1329,7 @@ if(typeof define === 'function' && define.amd){
     const vectorPreview = document.getElementById('vectorPreview');
     const convertBtn = document.getElementById('convertBtn');
     const downloadBtn = document.getElementById('downloadBtn');
+    const pngBtn = document.getElementById('pngBtn');
     const statusMessage = document.getElementById('statusMessage');
 
     const resSlider = document.getElementById('resSlider');
@@ -1337,6 +1342,7 @@ if(typeof define === 'function' && define.amd){
     let loadedImageDataUrl = '';
     let generatedSvgString = '';
     let origW = 0, origH = 0;
+    let lastOutW = 0, lastOutH = 0;
 
     const LIB_OK = (typeof ImageTracer !== 'undefined' && typeof ImageTracer.imagedataToSVG === 'function');
     if (!LIB_OK) { setStatus('変換ライブラリの読み込みに失敗しました。', true); }
@@ -1365,6 +1371,7 @@ if(typeof define === 'function' && define.amd){
             vectorPreview.innerHTML = '';
             generatedSvgString = '';
             downloadBtn.disabled = true;
+            pngBtn.disabled = true;
 
             const probe = new Image();
             probe.onload = function () {
@@ -1429,9 +1436,11 @@ if(typeof define === 'function' && define.amd){
 
                     const outW = Math.round(img.naturalWidth * userScale);
                     const outH = Math.round(img.naturalHeight * userScale);
+                    lastOutW = outW; lastOutH = outH;
                     const kb = Math.round(new Blob([generatedSvgString]).size / 1024);
                     setStatus('変換完了！　出力 ' + outW + '×' + outH + 'px ／ 約 ' + kb + ' KB');
                     downloadBtn.disabled = false;
+                    pngBtn.disabled = false;
                 } catch (e2) {
                     console.error(e2);
                     setStatus('変換中にエラー: ' + (e2 && e2.message ? e2.message : e2), true);
@@ -1459,6 +1468,47 @@ if(typeof define === 'function' && define.amd){
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    });
+
+    /* PNGダウンロード（生成済みSVGをキャンバスに描いてPNG化） */
+    pngBtn.addEventListener('click', function () {
+        if (!generatedSvgString) return;
+        setStatus('PNGを生成中...');
+        const svgBlob = new Blob([generatedSvgString], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+        const img = new Image();
+        img.onload = function () {
+            try {
+                const cw = lastOutW || img.naturalWidth || img.width;
+                const ch = lastOutH || img.naturalHeight || img.height;
+                const canvas = document.createElement('canvas');
+                canvas.width = cw;
+                canvas.height = ch;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, cw, ch);
+                URL.revokeObjectURL(url);
+                canvas.toBlob(function (blob) {
+                    if (!blob) { setStatus('PNGの生成に失敗しました。', true); return; }
+                    const purl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = purl;
+                    a.download = 'converted_vector.png';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(purl);
+                    setStatus('PNGをダウンロードしました（' + cw + '×' + ch + 'px）。');
+                }, 'image/png');
+            } catch (e) {
+                console.error(e);
+                setStatus('PNG変換でエラー: ' + (e && e.message ? e.message : e), true);
+            }
+        };
+        img.onerror = function () {
+            URL.revokeObjectURL(url);
+            setStatus('PNG生成用のSVG読み込みに失敗しました。', true);
+        };
+        img.src = url;
     });
 </script>
 
