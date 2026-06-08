@@ -4,17 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JS画像ベクター変換ツール</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/imagetracerjs/1.2.6/imagetracer_v1.2.6.js"></script>
+
+    <!--
+      ★修正点1：CDNを jsDelivr に変更（cdnjsには imagetracerjs は存在しません）
+      読み込みに失敗した場合は、下の script で unpkg から自動で再取得します。
+    -->
+    <script src="https://cdn.jsdelivr.net/npm/imagetracerjs@1.2.6/imagetracer_v1.2.6.js"></script>
+
     <style>
         body { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #f5f5f5; color: #333; }
         .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .drop-zone { border: 2px dashed #ccc; padding: 30px; text-align: center; cursor: pointer; margin-bottom: 20px; background: #fafafa; }
+        .drop-zone { border: 2px dashed #ccc; padding: 30px; text-align: center; cursor: pointer; margin-bottom: 20px; background: #fafafa; transition: 0.2s; }
         .drop-zone:hover { border-color: #0076ff; background: #f0f7ff; }
-        
+        .drop-zone.dragover { border-color: #0076ff; background: #e6f1ff; }
+
         /* ボタンエリア：最初から見えるように配置 */
         .control-area { display: flex; gap: 15px; margin: 20px 0; justify-content: center; align-items: center; flex-wrap: wrap; }
         button { font-size: 16px; padding: 12px 24px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
-        
+
         /* 変換ボタン */
         #convertBtn { background: #0076ff; color: white; }
         #convertBtn:hover { background: #005ecb; }
@@ -24,13 +31,14 @@
         #downloadBtn { background: #28a745; color: white; }
         #downloadBtn:hover { background: #218838; }
         #downloadBtn:disabled { background: #ccc; color: #666; cursor: not-allowed; }
-        
+
         #statusMessage { font-weight: bold; color: #444; min-width: 200px; text-align: center; }
+        #statusMessage.error { color: #c0392b; }
 
         .preview-area { display: flex; gap: 20px; margin-top: 20px; }
         .preview-box { flex: 1; border: 1px solid #ddd; padding: 10px; background: #fafafa; min-height: 300px; }
         img, svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-        
+
         @media (max-width: 600px) {
             .preview-area { flex-direction: column; }
         }
@@ -41,8 +49,8 @@
 <div class="container">
     <h2>画像ベクター変換 (SVG化)</h2>
     <p>JPGやPNGを選択し、「ベクターに変換する」ボタンを押してください。</p>
-    
-    <div class="drop-zone" onclick="document.getElementById('fileInput').click()">
+
+    <div class="drop-zone" id="dropZone">
         ここに画像をドロップするか、クリックして選択
         <input type="file" id="fileInput" accept="image/png, image/jpeg" style="display: none;">
     </div>
@@ -51,7 +59,7 @@
         <button id="convertBtn" disabled>① ベクターに変換する</button>
         <button id="downloadBtn" disabled>③ SVGをダウンロード</button>
     </div>
-    
+
     <div style="text-align: center; margin: 10px 0;">
         <span id="statusMessage">最初に画像を選択してください。</span>
     </div>
@@ -70,78 +78,154 @@
 
 <script>
     const fileInput = document.getElementById('fileInput');
+    const dropZone = document.getElementById('dropZone');
     const originalPreview = document.getElementById('originalPreview');
     const vectorPreview = document.getElementById('vectorPreview');
     const convertBtn = document.getElementById('convertBtn');
     const downloadBtn = document.getElementById('downloadBtn');
     const statusMessage = document.getElementById('statusMessage');
-    
-    let loadedImageDataUrl = ''; 
-    let generatedSvgString = ''; 
 
-    // 画像が選択された時の処理
-    fileInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
+    let loadedImageDataUrl = '';
+    let generatedSvgString = '';
+    let libReady = false;
+
+    function setStatus(text, isError) {
+        statusMessage.innerText = text;
+        statusMessage.classList.toggle('error', !!isError);
+    }
+
+    /* ──────────────────────────────────────────────
+       ★修正点2：ライブラリ読み込みのチェックとフォールバック
+       jsDelivr で読めなければ unpkg から取り直す。
+       それでもダメなら、原因が分かるメッセージを出す。
+       ────────────────────────────────────────────── */
+    function onLibReady() {
+        libReady = true;
+        // 画像が先に選ばれていれば変換ボタンを有効化
+        if (loadedImageDataUrl) {
+            convertBtn.disabled = false;
+            setStatus('画像が読み込まれました。「① ベクターに変換する」を押してください。');
+        }
+    }
+
+    function loadFallback() {
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/imagetracerjs@1.2.6/imagetracer_v1.2.6.js';
+        s.onload = function () {
+            if (typeof ImageTracer !== 'undefined') onLibReady();
+            else setStatus('変換ライブラリの読み込みに失敗しました（ネットワークをご確認ください）。', true);
+        };
+        s.onerror = function () {
+            setStatus('変換ライブラリの読み込みに失敗しました（ネットワークをご確認ください）。', true);
+        };
+        document.head.appendChild(s);
+    }
+
+    window.addEventListener('load', function () {
+        if (typeof ImageTracer !== 'undefined') {
+            onLibReady();
+        } else {
+            setStatus('変換ライブラリを再取得しています...');
+            loadFallback();
+        }
+    });
+
+    /* ── ファイル読み込み共通処理 ── */
+    function handleFile(file) {
         if (!file) return;
+        if (!/^image\/(png|jpeg)$/.test(file.type)) {
+            setStatus('PNGまたはJPEG画像を選んでください。', true);
+            return;
+        }
 
         const reader = new FileReader();
-        reader.onload = function(event) {
+        reader.onload = function (event) {
             loadedImageDataUrl = event.target.result;
-            
+
             // 元画像の表示
-            originalPreview.innerHTML = `<img src="${loadedImageDataUrl}" />`;
-            
-            // リセットと変換ボタンの有効化
+            originalPreview.innerHTML = `<img src="${loadedImageDataUrl}" alt="元画像" />`;
+
+            // リセット
             vectorPreview.innerHTML = '';
             generatedSvgString = '';
             downloadBtn.disabled = true;
-            
-            convertBtn.disabled = false;
-            statusMessage.innerText = '画像が読み込まれました。「① ベクターに変換する」を押してください。';
+
+            // ライブラリが準備できていれば変換ボタンを有効化
+            if (libReady) {
+                convertBtn.disabled = false;
+                setStatus('画像が読み込まれました。「① ベクターに変換する」を押してください。');
+            } else {
+                convertBtn.disabled = true;
+                setStatus('画像は読み込めました。変換ライブラリの準備が完了するまでお待ちください...');
+            }
         };
         reader.readAsDataURL(file);
+    }
+
+    // クリックでファイル選択
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+
+    /* ──────────────────────────────────────────────
+       ★修正点3：ドラッグ&ドロップ対応（文言どおりに動くように）
+       ────────────────────────────────────────────── */
+    ['dragenter', 'dragover'].forEach(evt => {
+        dropZone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+    });
+    ['dragleave', 'drop'].forEach(evt => {
+        dropZone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+        });
+    });
+    dropZone.addEventListener('drop', (e) => {
+        const file = e.dataTransfer.files[0];
+        handleFile(file);
     });
 
-    // ② ユーザーが「変換ボタン」を押した時の処理
-    convertBtn.addEventListener('click', function() {
+    /* ── ② 変換処理 ── */
+    convertBtn.addEventListener('click', function () {
         if (!loadedImageDataUrl) return;
+        if (!libReady || typeof ImageTracer === 'undefined') {
+            setStatus('変換ライブラリがまだ読み込まれていません。', true);
+            return;
+        }
 
         convertBtn.disabled = true;
-        statusMessage.innerText = '変換中...少々お待ちください...';
+        setStatus('変換中...少々お待ちください...');
 
-        // 描画更新のためのディレイ
-        setTimeout(function() {
+        // 「変換中...」の表示を画面に反映させてから重い処理を実行
+        setTimeout(function () {
             try {
-                // ImageTracerを実行
                 ImageTracer.imageToSVG(
                     loadedImageDataUrl,
-                    function(svgString) {
+                    function (svgString) {
                         generatedSvgString = svgString;
-                        
-                        // 画面にSVGを描画
                         vectorPreview.innerHTML = svgString;
-                        
-                        // ステータス更新とDLボタンの有効化
-                        statusMessage.innerText = '変換完了！「③ SVGをダウンロード」が押せます。';
+
+                        setStatus('変換完了！「③ SVGをダウンロード」が押せます。');
                         downloadBtn.disabled = false;
                         convertBtn.disabled = false; // 再変換もできるように戻す
                     },
-                    { 
-                        numberofcolors: 16, // 今回のタンブラー画像なら16色でも軽快に動きます
-                        strictdump: true,
+                    {
+                        // ★修正点4：存在しない strictdump を削除
+                        numberofcolors: 16, // タンブラー画像なら16色でも軽快に動きます
                         scale: 1
                     }
                 );
             } catch (error) {
                 console.error(error);
-                statusMessage.innerText = '変換中にエラーが発生しました。';
+                setStatus('変換中にエラーが発生しました。', true);
                 convertBtn.disabled = false;
             }
         }, 50);
     });
 
-    // ③ ダウンロード処理
-    downloadBtn.addEventListener('click', function() {
+    /* ── ③ ダウンロード処理 ── */
+    downloadBtn.addEventListener('click', function () {
         if (!generatedSvgString) return;
         const blob = new Blob([generatedSvgString], { type: 'image/svg+xml' });
         const url = URL.createObjectURL(blob);
