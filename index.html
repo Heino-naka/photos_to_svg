@@ -18,6 +18,10 @@
         .setting label .val { color: #0076ff; font-size: 15px; }
         .setting input[type=range] { width: 100%; accent-color: #0076ff; cursor: pointer; }
         .setting small { display: block; color: #888; font-size: 11px; margin-top: 6px; line-height: 1.5; }
+        .gapfill { text-align: center; margin: 0 0 14px; }
+        .gapfill label { font-weight: bold; font-size: 14px; cursor: pointer; }
+        .gapfill input { transform: scale(1.2); margin-right: 6px; vertical-align: middle; accent-color: #0076ff; }
+        .gapfill small { display: block; color: #888; font-size: 11px; margin-top: 5px; line-height: 1.5; }
 
         .control-area { display: flex; gap: 15px; margin: 20px 0; justify-content: center; align-items: center; flex-wrap: wrap; }
         button { font-size: 16px; padding: 12px 24px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
@@ -72,6 +76,11 @@
             <input type="range" id="scaleSlider" min="0.5" max="4" step="0.5" value="1">
             <small>1.0倍＝元画像と同じ大きさ<br>（等倍）。</small>
         </div>
+    </div>
+
+    <div class="gapfill">
+        <label><input type="checkbox" id="gapFill" checked> すき間（透明部分）を埋める</label>
+        <small>色の境目にできる白い隙間や穴を減らします。OFFにすると細部はシャープになりますが、すき間が出やすくなります。</small>
     </div>
 
     <div class="control-area">
@@ -1338,6 +1347,7 @@ if(typeof define === 'function' && define.amd){
     const resVal = document.getElementById('resVal');
     const colVal = document.getElementById('colVal');
     const scaleVal = document.getElementById('scaleVal');
+    const gapFill = document.getElementById('gapFill');
 
     let loadedImageDataUrl = '';
     let generatedSvgString = '';
@@ -1428,7 +1438,9 @@ if(typeof define === 'function' && define.amd){
                     // ②色数 と ③出力サイズ（解像度を下げても等倍が保たれるよう補正）
                     const options = {
                         numberofcolors: colors,
-                        scale: userScale / inputRes
+                        scale: userScale / inputRes,
+                        pathomit: gapFill.checked ? 0 : 8,
+                        strokewidth: gapFill.checked ? 2 : 1
                     };
 
                     generatedSvgString = ImageTracer.imagedataToSVG(imgd, options);
