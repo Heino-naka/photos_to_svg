@@ -8,24 +8,24 @@
     <style>
         body { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #f5f5f5; color: #333; }
         .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .drop-zone { border: 2px dashed #ccc; padding: 30px; text-align: center; cursor: pointer; margin-bottom: 20px; background: #fafafa; transition: 0.2s; }
+        .drop-zone { border: 2px dashed #ccc; padding: 30px; text-align: center; cursor: pointer; margin-bottom: 20px; background: #fafafa; }
         .drop-zone:hover { border-color: #0076ff; background: #f0f7ff; }
         
-        /* ボタンエリアのスタイル */
-        .control-area { display: flex; gap: 15px; margin: 20px 0; justify-content: center; align-items: center; }
+        /* ボタンエリア：最初から見えるように配置 */
+        .control-area { display: flex; gap: 15px; margin: 20px 0; justify-content: center; align-items: center; flex-wrap: wrap; }
         button { font-size: 16px; padding: 12px 24px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
         
-        /* ① 変換ボタン */
-        #convertBtn { background: #0076ff; color: white; display: none; }
+        /* 変換ボタン */
+        #convertBtn { background: #0076ff; color: white; }
         #convertBtn:hover { background: #005ecb; }
-        #convertBtn:disabled { background: #ccc; cursor: not-allowed; }
+        #convertBtn:disabled { background: #ccc; color: #666; cursor: not-allowed; }
 
-        /* ③ ダウンロードボタン */
-        #downloadBtn { background: #28a745; color: white; display: none; }
+        /* ダウンロードボタン */
+        #downloadBtn { background: #28a745; color: white; }
         #downloadBtn:hover { background: #218838; }
+        #downloadBtn:disabled { background: #ccc; color: #666; cursor: not-allowed; }
         
-        /* ステータス表示 */
-        #statusMessage { font-weight: bold; color: #666; margin-left: 10px; }
+        #statusMessage { font-weight: bold; color: #444; min-width: 200px; text-align: center; }
 
         .preview-area { display: flex; gap: 20px; margin-top: 20px; }
         .preview-box { flex: 1; border: 1px solid #ddd; padding: 10px; background: #fafafa; min-height: 300px; }
@@ -40,7 +40,7 @@
 
 <div class="container">
     <h2>画像ベクター変換 (SVG化)</h2>
-    <p>JPGやPNGを選択し、「ベクターに変換する」ボタンを押してください。（※写真などの複雑な画像は処理に時間がかかります）</p>
+    <p>JPGやPNGを選択し、「ベクターに変換する」ボタンを押してください。</p>
     
     <div class="drop-zone" onclick="document.getElementById('fileInput').click()">
         ここに画像をドロップするか、クリックして選択
@@ -48,9 +48,12 @@
     </div>
 
     <div class="control-area">
-        <button id="convertBtn">① ベクターに変換する</button>
-        <button id="downloadBtn">③ SVGをダウンロード</button>
-        <span id="statusMessage"></span>
+        <button id="convertBtn" disabled>① ベクターに変換する</button>
+        <button id="downloadBtn" disabled>③ SVGをダウンロード</button>
+    </div>
+    
+    <div style="text-align: center; margin: 10px 0;">
+        <span id="statusMessage">最初に画像を選択してください。</span>
     </div>
 
     <div class="preview-area">
@@ -73,8 +76,8 @@
     const downloadBtn = document.getElementById('downloadBtn');
     const statusMessage = document.getElementById('statusMessage');
     
-    let loadedImageDataUrl = ''; // 読み込んだ画像のデータを一時保存
-    let generatedSvgString = ''; // ダウンロード用に保持
+    let loadedImageDataUrl = ''; 
+    let generatedSvgString = ''; 
 
     // 画像が選択された時の処理
     fileInput.addEventListener('change', function(e) {
@@ -84,16 +87,17 @@
         const reader = new FileReader();
         reader.onload = function(event) {
             loadedImageDataUrl = event.target.result;
-            // 元画像のプレビュー表示
+            
+            // 元画像の表示
             originalPreview.innerHTML = `<img src="${loadedImageDataUrl}" />`;
             
-            // 状態のリセットと①変換ボタンの表示
+            // リセットと変換ボタンの有効化
             vectorPreview.innerHTML = '';
             generatedSvgString = '';
-            downloadBtn.style.display = 'none';
-            statusMessage.innerText = '画像が読み込まれました。ボタンを押して変換してください。';
-            convertBtn.style.display = 'inline-block';
+            downloadBtn.disabled = true;
+            
             convertBtn.disabled = false;
+            statusMessage.innerText = '画像が読み込まれました。「① ベクターに変換する」を押してください。';
         };
         reader.readAsDataURL(file);
     });
@@ -102,14 +106,13 @@
     convertBtn.addEventListener('click', function() {
         if (!loadedImageDataUrl) return;
 
-        // ボタンを無効化し、処理中メッセージを表示
         convertBtn.disabled = true;
-        statusMessage.innerText = '変換中...（※画像によっては数十秒かかります）';
+        statusMessage.innerText = '変換中...少々お待ちください...';
 
-        // 画面描画の更新を確実に行うため、わずかに遅延させて変換を実行
+        // 描画更新のためのディレイ
         setTimeout(function() {
             try {
-                // ImageTracerでベクター変換を実行
+                // ImageTracerを実行
                 ImageTracer.imageToSVG(
                     loadedImageDataUrl,
                     function(svgString) {
@@ -118,22 +121,23 @@
                         // 画面にSVGを描画
                         vectorPreview.innerHTML = svgString;
                         
-                        // ステータス更新と③ダウンロードボタンの表示
-                        statusMessage.innerText = '変換が完了しました！';
-                        downloadBtn.style.display = 'inline-block';
+                        // ステータス更新とDLボタンの有効化
+                        statusMessage.innerText = '変換完了！「③ SVGをダウンロード」が押せます。';
+                        downloadBtn.disabled = false;
+                        convertBtn.disabled = false; // 再変換もできるように戻す
                     },
                     { 
-                        numberofcolors: 8, // 処理軽減のため初期値を16→8に調整
+                        numberofcolors: 16, // 今回のタンブラー画像なら16色でも軽快に動きます
                         strictdump: true,
                         scale: 1
                     }
                 );
             } catch (error) {
                 console.error(error);
-                statusMessage.innerText = 'エラーが発生しました。画像が複雑すぎるか、サイズが大きすぎる可能性があります。';
+                statusMessage.innerText = '変換中にエラーが発生しました。';
                 convertBtn.disabled = false;
             }
-        }, 100);
+        }, 50);
     });
 
     // ③ ダウンロード処理
